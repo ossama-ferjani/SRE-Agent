@@ -1,15 +1,22 @@
 servers:
   kubernetes:
-    url: "${MCP_KUBERNETES_URL:-http://localhost:3001/mcp}"
+    transport: "stdio"
+    command: "npx"
+    args: ["mcp-server-kubernetes"]
     description: "Kubernetes — pods, logs, events, deployments, namespaces, scale"
-    transport: "streamable_http"
 
   prometheus:
-    url: "${MCP_PROMETHEUS_URL:-http://localhost:3002/mcp}"
+    transport: "stdio"
+    command: "prometheus-mcp-server"
+    env:
+      PROMETHEUS_URL: "${PROMETHEUS_URL:-http://localhost:9090}"
     description: "Prometheus — PromQL, alerts, targets, scrape health, rules"
-    transport: "streamable_http"
 
   argo:
-    url: "${MCP_ARGO_URL:-http://localhost:3003/mcp}"
+    transport: "stdio"
+    command: "npx"
+    args: ["argocd-mcp@latest", "stdio"]
+    env:
+      ARGOCD_BASE_URL: "${ARGOCD_URL:-https://localhost:8080}"
+      ARGOCD_API_TOKEN: "${ARGOCD_TOKEN:-}"
     description: "Argo CD — app list, sync, rollback, deploy history, health"
-    transport: "streamable_http"

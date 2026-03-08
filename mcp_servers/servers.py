@@ -78,12 +78,23 @@ async def load_mcp_tools_async(
     # Build server configs for the client
     server_configs: dict[str, dict] = {}
     for name, cfg in servers.items():
-        url = expand_env_vars(cfg.get("url", ""))
         transport = cfg.get("transport", "streamable_http")
-        server_configs[name] = {
-            "url": url,
-            "transport": transport,
-        }
+        if transport == "stdio":
+            entry: dict = {
+                "transport": "stdio",
+                "command": cfg["command"],
+                "args": cfg.get("args", []),
+            }
+            # Inherit the full process environment (preserves PATH, HOME, etc.)
+            # then overlay any server-specific env vars from config.
+            raw_env = cfg.get("env", {})
+            entry["env"] = {**os.environ, **{k: expand_env_vars(v) for k, v in raw_env.items()}}
+        else:
+            entry = {
+                "url": expand_env_vars(cfg.get("url", "")),
+                "transport": transport,
+            }
+        server_configs[name] = entry
 
     # Connect to each server individually to handle failures gracefully.
     # langchain-mcp-adapters >=0.1.0 dropped context-manager support;
@@ -96,9 +107,9 @@ async def load_mcp_tools_async(
             status[name] = f"connected ({len(tools)} tools)"
             logger.info("MCP server '%s': connected with %d tools", name, len(tools))
         except Exception as exc:
-            url = cfg.get("url", "unknown")
+            label = cfg.get("url") or cfg.get("command", "unknown")
             status[name] = f"unreachable: {exc}"
-            logger.warning("MCP server '%s' unreachable at %s: %s", name, url, exc)
+            logger.warning("MCP server '%s' unreachable (%s): %s", name, label, exc)
 
     return all_tools, status
 
@@ -112,7 +123,7 @@ def load_mcp_tools_sync(
     """
     try:
         loop = asyncio.get_running_loop()
-        # Event loop already running — use nest_asyncio
+        # Event loop already running — use nest_asyncio to re-enter the same loop
         try:
             import nest_asyncio
             nest_asyncio.apply()
@@ -124,7 +135,8 @@ def load_mcp_tools_sync(
                     asyncio.run, load_mcp_tools_async(server_names)
                 )
                 return future.result()
-        return asyncio.run(load_mcp_tools_async(server_names))
+        # Run on the *existing* loop (not a new one) to avoid "bound to different loop" errors
+        return loop.run_until_complete(load_mcp_tools_async(server_names))
     except RuntimeError:
         # No event loop running — safe to use asyncio.run()
         return asyncio.run(load_mcp_tools_async(server_names))

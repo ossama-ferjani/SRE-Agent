@@ -1,5 +1,5 @@
 .PHONY: install run test test-memory test-registry lint format clean \
-        mcp-start mcp-stop mcp-logs sqld-up sqld-down reset-memory \
+        mcp-install sqld-up sqld-down reset-memory \
         port-forward switch-model
 
 # ── Setup ──────────────────────────────────────────────────────
@@ -13,17 +13,9 @@ run:
 model:
 	MODEL=$(MODEL) python3 -m cli.cli
 
-# ── MCP servers (Python, run locally) ─────────────────────────
-mcp-start:
+# ── MCP servers (community, stdio — spawned automatically by the agent) ───────
+mcp-install:
 	./tools/start_mcp_servers.sh
-
-mcp-stop:
-	./tools/start_mcp_servers.sh stop
-
-mcp-logs:
-	@echo "=== Kubernetes MCP ===" && tail -30 /tmp/mcp-k8s.log || true
-	@echo "=== Prometheus MCP ===" && tail -30 /tmp/mcp-prometheus.log || true
-	@echo "=== Argo CD MCP    ===" && tail -30 /tmp/mcp-argocd.log || true
 
 # ── Docker sqld (networked SQLite, optional) ───────────────────
 sqld-up:
