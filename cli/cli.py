@@ -409,23 +409,15 @@ def _cmd_export() -> None:
     ))
 
 
-def main() -> None:
-    """Entry point — parse args, load env, start the REPL loop."""
-    load_dotenv()
+async def _main_async(thread_id: str, model_override: str | None) -> None:
+    """Async REPL — runs entirely in one event loop so MCP stdio sessions stay alive."""
+    import asyncio
 
-    parser = argparse.ArgumentParser(description="SRE Agent — LangGraph-powered CLI")
-    parser.add_argument("--model", default=None, help="Model string (e.g. gemini/gemini-2.0-flash)")
-    parser.add_argument("--thread", default="default", help="LangGraph thread ID")
-    args = parser.parse_args()
-
-    thread_id = args.thread
-    model_override = args.model
-
-    # ── Load MCP tools ──
+    # ── Load MCP tools (async — sessions stay alive in this loop) ──
     console.print("[dim]Connecting to MCP servers...[/dim]")
     try:
-        from mcp_servers.servers import load_mcp_tools_sync
-        tools, server_status = load_mcp_tools_sync()
+        from mcp_servers.servers import load_mcp_tools_async
+        tools, server_status = await load_mcp_tools_async()
     except Exception as exc:
         console.print(Panel(f"[red]Failed to load MCP tools: {exc}[/red]", title="MCP Error"))
         tools, server_status = [], {}
@@ -451,19 +443,19 @@ def main() -> None:
     _print_checklist(model_info, server_status, thread_id)
 
     # ── Determine model_name for state ──
-    model_name = model_override
-    if not model_name:
-        import os
-        model_name = os.environ.get("MODEL")
-    if not model_name:
-        model_name = f"{model_info['provider']}/{model_info['model']}"
+    import os
+    model_name = model_override or os.environ.get("MODEL") or f"{model_info['provider']}/{model_info['model']}"
 
     # ── REPL loop ──
     config = {"configurable": {"thread_id": thread_id}}
+    loop = asyncio.get_event_loop()
 
     while True:
         try:
-            user_input = Prompt.ask("\n[bold cyan]You[/bold cyan]", console=console)
+            # Run blocking prompt in executor so the event loop stays free
+            user_input = await loop.run_in_executor(
+                None, lambda: Prompt.ask("\n[bold cyan]You[/bold cyan]", console=console)
+            )
         except KeyboardInterrupt:
             console.print("\n[dim]👋 Ctrl+C — exiting.[/dim]")
             break
@@ -553,19 +545,16 @@ def main() -> None:
 
             continue
 
-        # ── Normal chat message — stream to agent ──
+        # ── Normal chat message — stream directly in this event loop ──
         try:
-            from agent.graph import stream_graph
+            from agent.graph import _stream_graph_async
 
-            # Show loading spinner
+            full_response = ""
             with console.status("[bold cyan]⚙️  Processing your request...[/bold cyan]", spinner="dots"):
-                last_content = ""
-                full_response = ""
-                for chunk in stream_graph(graph, user_input, config):
+                async for chunk in _stream_graph_async(graph, user_input, config):
                     full_response = chunk
 
-            # Format and display the complete response
-            console.print()  # Blank line for spacing
+            console.print()
             ResponseFormatter.format_response(full_response)
 
         except ValueError as exc:
@@ -582,6 +571,19 @@ def main() -> None:
                 console.print(Panel(f"[red]❌ {exc}[/red]", title="Error", border_style="red", padding=(1, 2)))
         except Exception as exc:
             console.print(Panel(f"[red]❌ {exc}[/red]", title="Agent Error", border_style="red", padding=(1, 2)))
+
+
+def main() -> None:
+    """Entry point — parse args, load env, run the async REPL."""
+    import asyncio
+    load_dotenv()
+
+    parser = argparse.ArgumentParser(description="SRE Agent — LangGraph-powered CLI")
+    parser.add_argument("--model", default=None, help="Model string (e.g. gemini/gemini-2.0-flash)")
+    parser.add_argument("--thread", default="default", help="LangGraph thread ID")
+    args = parser.parse_args()
+
+    asyncio.run(_main_async(args.thread, args.model))
 
 
 if __name__ == "__main__":
