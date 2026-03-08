@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+
+  # ── SQLite Server (sqld / libSQL) ──────────────────────────────
+  sqld:
+    image: ghcr.io/tursodatabase/sqld:latest
+    container_name: sre-sqld
+    ports:
+      - "8082:8080"
+    volumes:
+      - sqld_data:/var/lib/sqld
+    environment:
+      - SQLD_NODE=primary
+    restart: unless-stopped
+
+  # ── MCP servers run locally (no public Docker images exist) ──────────────
+  # Start with:  ./tools/start_mcp_servers.sh
+  # They bind to:
+  #   http://localhost:3001/mcp  (kubernetes)
+  #   http://localhost:3002/mcp  (prometheus)
+  #   http://localhost:3003/mcp  (argocd)
+
+volumes:
+  sqld_data:

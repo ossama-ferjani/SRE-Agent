@@ -1,0 +1,39 @@
+# ─── Active Model ─────────────────────────────────────────────
+# Change ONLY this file to switch models. Zero code changes needed.
+# Format: provider/model-name
+# Supported: gemini, claude, openai, ollama, mistral
+
+active:
+  provider: "openai-compat"
+  model: "google/gemini-3-pro-preview"
+  # Switch back to native providers any time:
+  # provider: "gemini"
+  # model: "gemini-2.0-flash"
+
+# ─── Provider Registry ────────────────────────────────────────
+providers:
+  gemini:
+    env_var: "GOOGLE_API_KEY"
+    langchain_class: "ChatGoogleGenerativeAI"
+    install: "langchain-google-genai"
+  claude:
+    env_var: "ANTHROPIC_API_KEY"
+    langchain_class: "ChatAnthropic"
+    install: "langchain-anthropic"
+  openai:
+    env_var: "OPENAI_API_KEY"
+    langchain_class: "ChatOpenAI"
+    install: "langchain-openai"
+  openai-compat:
+    env_var: "OPENAI_COMPAT_API_KEY"
+    base_url_env: "OPENAI_COMPAT_BASE_URL"
+    langchain_class: "ChatOpenAI"
+    install: "langchain-openai"
+  ollama:
+    env_var: null
+    langchain_class: "ChatOllama"
+    install: "langchain-ollama"
+  mistral:
+    env_var: "MISTRAL_API_KEY"
+    langchain_class: "ChatMistralAI"
+    install: "langchain-mistralai"

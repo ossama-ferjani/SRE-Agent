@@ -1,0 +1,17 @@
+agent:
+  max_conversation_turns: 40
+  memory_inject_every_turn: true
+  confirm_destructive_actions: true
+  tool_call_display: true
+
+memory:
+  db_path: "~/.sre_agent/memory.db"
+  checkpoint_path: "~/.sre_agent/checkpoints.db"
+  max_patterns: 100
+  incidents_in_prompt: 5
+  patterns_in_prompt: 5
+
+cli:
+  stream_output: true
+  default_thread: "default"
+  show_tool_calls: true
