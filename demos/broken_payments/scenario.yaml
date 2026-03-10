@@ -1,0 +1,170 @@
+name: "Payments Service OOMKill Outage"
+description: >
+  payments-service is completely down in production after an ArgoCD sync
+  pushed image v2.3.1 which contains a memory leak. Pods are caught in a
+  CrashLoopBackOff / OOMKill loop. Checkout is degrading downstream.
+  Root fix: ArgoCD rollback to v2.3.0.
+
+alert:
+  name: PaymentsServiceDown
+  severity: critical
+  fired_ago: "22 minutes"
+
+turns:
+  - prompt: >
+      CRITICAL ALERT: payments-service is completely down in production.
+      Pods are in CrashLoopBackOff. Checkout is also degraded.
+      Investigate the root cause and tell me what is happening.
+
+  - prompt: >
+      What do the Prometheus metrics show?
+      Check memory usage and the error rate for both payments and checkout.
+
+  - prompt: >
+      Check Argo CD — which app changed recently and what was deployed?
+      I need the full deployment history for payments.
+
+  - prompt: >
+      The v2.3.1 image is clearly the culprit.
+      Roll back the payments app in Argo CD to the last stable revision.
+
+tools:
+
+  # ── Kubernetes ──────────────────────────────────────────────────────────────
+
+  mcp_kubernetes__list_pods:
+    description: "List pods and their status in a Kubernetes namespace."
+    args:
+      - name: namespace
+        type: str
+        default: "default"
+    responses:
+      - match: { namespace: ["production", "prod"] }
+        output: |
+          NAME                              READY  STATUS               RESTARTS  AGE
+          payments-7d9f8b-xk2p4             0/1    CrashLoopBackOff     14        22m
+          payments-7d9f8b-rw9q1             0/1    OOMKilled            11        22m
+          payments-7d9f8b-mn3s7             0/1    CrashLoopBackOff     12        21m
+          checkout-6c4d9-ppq2r              1/1    Running              0         3h
+          auth-5b8e2-zzr4k                  1/1    Running              0         1d
+          postgres-primary-0                1/1    Running              0         7d
+      - default: "No pods found in namespace '{namespace}'."
+
+  mcp_kubernetes__describe_pod:
+    description: "Describe a pod — image, limits, last state, events."
+    args:
+      - name: namespace
+        type: str
+      - name: pod_name
+        type: str
+    responses:
+      - match_contains: { pod_name: "payments" }
+        output: |
+          Name:      {pod_name}
+          Namespace: production
+          Image:     gcr.io/company/payments:v2.3.1
+          Limits:    cpu=500m  memory=512Mi
+
+          Last State:
+            Reason:    OOMKilled
+            Exit Code: 137
+            Finished:  2026-03-09 14:33:47 UTC
+
+          Events:
+            Warning  OOMKilling  5m   kubelet  memory limit 512Mi exceeded — container killed
+            Warning  BackOff     2m   kubelet  back-off restarting failed container
+            Normal   Pulled      22m  kubelet  image gcr.io/company/payments:v2.3.1 pulled
+            Normal   Started     22m  kubelet  container started after ArgoCD sync
+      - default: "Pod '{pod_name}' not found."
+
+  # ── Prometheus ──────────────────────────────────────────────────────────────
+
+  mcp_prometheus__query:
+    description: "Run a PromQL instant query against Prometheus."
+    args:
+      - name: promql
+        type: str
+    responses:
+      - match_contains: { promql: ["memory", "payments"] }
+        output: |
+          container_memory_working_set_bytes{pod=~'payments.*'}
+            payments-7d9f8b-xk2p4  509 MiB  (99.4% of 512Mi limit)
+            payments-7d9f8b-rw9q1  511 MiB  (99.8% of 512Mi limit)  <- OOMKilled
+            payments-7d9f8b-mn3s7  507 MiB  (99.0% of 512Mi limit)
+
+          Trend: +18 MiB/min with no plateau — classic unbounded memory leak.
+          Pattern started at 13:58 UTC, exactly when ArgoCD pushed v2.3.1.
+      - match_contains: { promql: ["error", "5xx", "http_requests"] }
+        output: |
+          http_requests_total{service='payments', status=~'5..'}
+            error rate (last 5m): 98.7%  (baseline: 0.3%)
+
+          http_requests_total{service='checkout', status=~'5..'}
+            error rate (last 5m): 44.1%  <- downstream blast radius
+      - match_contains: { promql: ["restart"] }
+        output: |
+          kube_pod_container_status_restarts_total{pod=~'payments.*'}
+            payments-7d9f8b-xk2p4: 14 restarts in 22 minutes
+            payments-7d9f8b-rw9q1: 11 restarts in 22 minutes
+            payments-7d9f8b-mn3s7: 12 restarts in 22 minutes
+      - default: "No data for query: '{promql}'"
+
+  mcp_prometheus__get_alerts:
+    description: "Return currently firing Prometheus alerts."
+    args:
+      - name: state
+        type: str
+        default: "firing"
+    responses:
+      - default: |
+          ALERT                    STATE    SEVERITY  DURATION
+          PaymentsServiceDown      firing   critical  22m
+          PaymentsPodOOMKilling    firing   critical  22m
+          CheckoutHighLatency      firing   high      18m
+          PaymentsHighErrorRate    firing   critical  22m
+
+  # ── Argo CD ─────────────────────────────────────────────────────────────────
+
+  mcp_argocd__list_apps:
+    description: "List all Argo CD applications with sync and health status."
+    args:
+      - name: project
+        type: str
+        default: ""
+    responses:
+      - default: |
+          NAME      PROJECT  SYNC STATUS  HEALTH STATUS  REVISION
+          payments  default  Synced       Degraded       a1b2c3d  <- synced 22m ago (v2.3.1)
+          checkout  default  Synced       Healthy        f4e5d6c
+          auth      default  OutOfSync    Healthy        g7h8i9j
+
+  mcp_argocd__get_app_history:
+    description: "Get deployment history for an Argo CD application."
+    args:
+      - name: app_name
+        type: str
+    responses:
+      - match: { app_name: "payments" }
+        output: |
+          ID  DATE                  REVISION  IMAGE TAG  HEALTHY
+          42  2026-03-09 13:58 UTC  a1b2c3d   v2.3.1     No   <- CURRENT (broken)
+          41  2026-03-01 10:12 UTC  b3c4d5e   v2.3.0     Yes  <- last stable (8d clean)
+          40  2026-02-20 09:00 UTC  c5d6e7f   v2.2.9     Yes
+      - default: "No history for '{app_name}'."
+
+  mcp_argocd__rollback:
+    description: "Roll back an Argo CD application to a previous deployment revision."
+    args:
+      - name: app_name
+        type: str
+      - name: revision_id
+        type: int
+    responses:
+      - match: { app_name: "payments", revision_id: 41 }
+        output: |
+          Rollback initiated.
+            From: revision 42  (a1b2c3d / v2.3.1)
+            To:   revision 41  (b3c4d5e / v2.3.0)
+            Status: Syncing — deploying v2.3.0 to production
+            ETA: ~3 minutes (image already cached on nodes)
+      - default: "Rollback failed: revision {revision_id} not found for '{app_name}'."

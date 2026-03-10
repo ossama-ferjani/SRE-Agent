@@ -1,0 +1,42 @@
+# ArgoCD Application — points at the broken-payments k8s manifests.
+#
+# Apply this to whichever namespace your ArgoCD is watching (usually argocd).
+# It will auto-sync the k8s/ manifests into the production namespace, which
+# is exactly the "bad deployment" event the agent needs to investigate.
+#
+# Apply:  kubectl apply -f demos/broken_payments/argocd/application.yaml -n argocd
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: payments
+  namespace: argocd
+  labels:
+    demo: broken-payments
+  annotations:
+    # Simulate the commit message that caused the outage
+    deployment.reason: "feature/payment-retry-logic — v2.3.1"
+spec:
+  project: default
+
+  source:
+    # Point this at your own fork/repo path, or use a local path override.
+    # For local testing with kind + ArgoCD, use repoURL of your cluster-local
+    # git server, or replace with a real Git repo that contains the k8s/ folder.
+    repoURL: https://github.com/your-org/k8s-manifests   # <-- update this
+    targetRevision: HEAD
+    path: demos/broken_payments/k8s
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: false        # leave selfHeal off so the broken state persists
+    syncOptions:
+      - CreateNamespace=true
+
+  # Rollback history kept so the agent can roll back to a previous revision
+  revisionHistoryLimit: 5

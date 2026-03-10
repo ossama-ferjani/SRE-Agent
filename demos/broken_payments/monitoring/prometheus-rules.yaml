@@ -1,0 +1,98 @@
+# Prometheus alerting rules for the broken-payments demo.
+# Requires kube-prometheus-stack (or Prometheus Operator) in the cluster.
+
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: broken-payments-alerts
+  namespace: production
+  labels:
+    demo: broken-payments
+    # match the ruleSelector your Prometheus Operator uses, e.g.:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: payments.critical
+      interval: 15s
+      rules:
+
+        # Fires as soon as no payments pod is Ready
+        - alert: PaymentsServiceDown
+          expr: |
+            kube_deployment_status_replicas_ready{
+              namespace="production", deployment="payments"
+            } == 0
+          for: 30s
+          labels:
+            severity: critical
+            namespace: production
+            service: payments
+          annotations:
+            summary: "payments-service has zero ready replicas"
+            description: >
+              All payments pods are unavailable. Deployment reports
+              {{ $value }} ready replicas (expected 3).
+
+        # Fires when any payments pod is being OOMKilled
+        - alert: PaymentsPodOOMKilling
+          expr: |
+            kube_pod_container_status_last_terminated_reason{
+              namespace="production",
+              container="payments",
+              reason="OOMKilled"
+            } == 1
+          for: 0s
+          labels:
+            severity: critical
+            namespace: production
+            service: payments
+          annotations:
+            summary: "payments container OOMKilled"
+            description: >
+              Pod {{ $labels.pod }} container {{ $labels.container }}
+              was terminated with OOMKilled.
+
+        # Fires when payments pods restart more than 5 times in 10 minutes
+        - alert: PaymentsHighRestartRate
+          expr: |
+            increase(
+              kube_pod_container_status_restarts_total{
+                namespace="production", container="payments"
+              }[10m]
+            ) > 5
+          for: 0s
+          labels:
+            severity: critical
+            namespace: production
+            service: payments
+          annotations:
+            summary: "payments pods restarting rapidly"
+            description: >
+              Pod {{ $labels.pod }} has restarted {{ $value | printf "%.0f" }}
+              times in the last 10 minutes.
+
+    - name: checkout.degraded
+      interval: 30s
+      rules:
+
+        # Fires when checkout is healthy but payments dependency is gone
+        - alert: CheckoutDegradedDueToPayments
+          expr: |
+            kube_deployment_status_replicas_ready{
+              namespace="production", deployment="checkout"
+            } > 0
+            and
+            kube_deployment_status_replicas_ready{
+              namespace="production", deployment="payments"
+            } == 0
+          for: 1m
+          labels:
+            severity: high
+            namespace: production
+            service: checkout
+          annotations:
+            summary: "checkout degraded — payments dependency is down"
+            description: >
+              checkout pods are running but payments is unavailable,
+              causing 503 errors on all checkout → payments calls.

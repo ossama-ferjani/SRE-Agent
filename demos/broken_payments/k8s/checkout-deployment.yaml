@@ -1,0 +1,114 @@
+# checkout-service — healthy but degraded because payments is down
+#
+# Simulates downstream blast radius: returns HTTP 503 when it cannot reach
+# the payments service, driving up its own error rate in Prometheus.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout
+  namespace: production
+  labels:
+    app: checkout
+    demo: broken-payments
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: checkout
+  template:
+    metadata:
+      labels:
+        app: checkout
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: write-script
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              cat > /scripts/checkout.py << 'EOF'
+              import http.server, urllib.request, urllib.error, threading, time
+
+              PAYMENTS_URL = "http://payments.production.svc.cluster.local/healthz"
+
+              class Handler(http.server.BaseHTTPRequestHandler):
+                  def do_GET(self):
+                      if self.path == "/healthz":
+                          self.send_response(200)
+                          self.end_headers()
+                          self.wfile.write(b"ok")
+                          return
+                      # Try to reach payments; return 503 if it is down
+                      try:
+                          urllib.request.urlopen(PAYMENTS_URL, timeout=2)
+                          self.send_response(200)
+                          self.end_headers()
+                          self.wfile.write(b"checkout ok")
+                      except Exception:
+                          self.send_response(503)
+                          self.end_headers()
+                          self.wfile.write(b"payments unavailable")
+                  def log_message(self, *a): pass
+
+              http.server.HTTPServer(("", 8080), Handler).serve_forever()
+              EOF
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+
+      containers:
+        - name: checkout
+          image: python:3.11-alpine
+          command: ["python", "/scripts/checkout.py"]
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+
+      volumes:
+        - name: scripts
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkout
+  namespace: production
+  labels:
+    app: checkout
+    demo: broken-payments
+spec:
+  selector:
+    app: checkout
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
