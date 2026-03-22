@@ -7,6 +7,14 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
+@pytest.fixture(autouse=True)
+def clear_mcp_gateway_env(monkeypatch):
+    monkeypatch.delenv("MCP_GATEWAY_URL", raising=False)
+    monkeypatch.delenv("MCP_KUBERNETES_URL", raising=False)
+    monkeypatch.delenv("MCP_PROMETHEUS_URL", raising=False)
+    monkeypatch.delenv("MCP_ARGO_URL", raising=False)
+
+
 def test_expand_env_vars_returns_default_when_unset(monkeypatch):
     from mcp_servers.servers import expand_env_vars
     monkeypatch.delenv("MY_TEST_VAR_XYZ", raising=False)

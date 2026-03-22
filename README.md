@@ -73,6 +73,29 @@ python -m cli.cli
 make run
 ```
 
+## Agentgateway (Optional)
+
+Agentgateway adds:
+- A unified MCP endpoint at `http://localhost:3000` that federates Kubernetes, Prometheus, and Argo CD tools
+- LLM routing/proxying at `http://localhost:8080/v1` with optional budget controls
+- A built-in UI at `http://localhost:15000/ui`
+
+Start gateway mode (includes MCP bootstrap):
+
+```bash
+make gateway
+```
+
+Run the agent through the gateway:
+
+```bash
+make run-gateway
+```
+
+Docs:
+- [Agentgateway standalone docs](https://agentgateway.dev/docs/standalone/latest/)
+- [MCP quickstart](https://agentgateway.dev/docs/standalone/latest/quickstart/mcp)
+
 ## Usage Examples
 
 ```

@@ -75,6 +75,66 @@ async def load_mcp_tools_async(
             status[name] = "error: langchain-mcp-adapters not installed"
         return [], status
 
+    # Optional gateway mode:
+    # - If MCP_GATEWAY_URL is set, try loading all tools through one federated endpoint.
+    # - If gateway connection fails, gracefully fall back to direct server config.
+    gateway_url = os.environ.get("MCP_GATEWAY_URL", "").strip()
+    if gateway_url:
+        gateway_cfg = {
+            "agentgateway": {
+                "url": gateway_url,
+                "transport": "streamable_http",
+            }
+        }
+        try:
+            client = MultiServerMCPClient(gateway_cfg)
+            tools = await client.get_tools()
+            shared_status = f"connected via gateway ({len(tools)} tools)"
+            for name in servers:
+                status[name] = shared_status
+            status["agentgateway"] = f"connected ({len(tools)} tools)"
+            logger.info("MCP gateway '%s': connected with %d tools", gateway_url, len(tools))
+            return tools, status
+        except Exception as exc:
+            logger.warning(
+                "MCP gateway '%s' unreachable (%s). Falling back to direct MCP servers.",
+                gateway_url,
+                exc,
+            )
+
+    # Direct HTTP mode (ports 3001/3002/3003 by default):
+    # try explicit MCP endpoints first, then fall back to config.yaml (stdio).
+    direct_http_configs = {
+        "kubernetes": {
+            "url": os.environ.get("MCP_KUBERNETES_URL", "http://localhost:3001"),
+            "transport": "streamable_http",
+        },
+        "prometheus": {
+            "url": os.environ.get("MCP_PROMETHEUS_URL", "http://localhost:3002"),
+            "transport": "streamable_http",
+        },
+        "argo": {
+            "url": os.environ.get("MCP_ARGO_URL", "http://localhost:3003"),
+            "transport": "streamable_http",
+        },
+    }
+    if server_names:
+        direct_http_configs = {
+            k: v for k, v in direct_http_configs.items() if k in server_names
+        }
+    try:
+        direct_client = MultiServerMCPClient(direct_http_configs)
+        direct_tools = await direct_client.get_tools()
+        for name in direct_http_configs:
+            status[name] = f"connected ({len(direct_tools)} tools via direct MCP)"
+        logger.info("Direct MCP servers connected with %d tools", len(direct_tools))
+        return direct_tools, status
+    except Exception as exc:
+        logger.warning(
+            "Direct MCP endpoints unavailable (%s). Falling back to configured MCP transports.",
+            exc,
+        )
+
     # Build server configs for the client
     server_configs: dict[str, dict] = {}
     for name, cfg in servers.items():

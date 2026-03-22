@@ -1,0 +1,50 @@
+binds:
+  - port: 3000
+    listeners:
+      - routes:
+          - policies:
+              cors:
+                allowOrigins: ["*"]
+                allowHeaders:
+                  - mcp-protocol-version
+                  - content-type
+                  - authorization
+                exposeHeaders:
+                  - Mcp-Session-Id
+              localRateLimit:
+                - maxTokens: 200
+                  tokensPerFill: 200
+                  fillInterval: 60s
+                  type: requests
+            backends:
+              - mcp:
+                  targets:
+                    - name: kubernetes
+                      mcp:
+                        host: localhost
+                        port: 3001
+                        path: /mcp
+                    - name: prometheus
+                      mcp:
+                        host: localhost
+                        port: 3002
+                        path: /mcp
+                    - name: argocd
+                      mcp:
+                        host: localhost
+                        port: 3003
+                        path: /mcp
+
+llm:
+  port: 8080
+  # Supported provider values: openAI | anthropic | gemini.
+  # Defaults are set for OpenAI-compatible providers like KodeKloud.
+  models:
+    - name: "*"
+      provider: openAI
+      backendTLS:
+        hostname: ${LLM_GATEWAY_TLS_HOSTNAME:-api.ai.kodekloud.com}
+      params:
+        model: ${LLM_GATEWAY_MODEL:-google/gemini-3-pro-preview}
+        apiKey: ${OPENAI_COMPAT_API_KEY:-}
+        hostOverride: ${LLM_GATEWAY_HOST_OVERRIDE:-api.ai.kodekloud.com:443}

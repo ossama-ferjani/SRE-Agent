@@ -85,6 +85,7 @@ def get_model(model_string: str | None = None) -> BaseChatModel:
         "google": "gemini",
         "anthropic": "claude",
         "openai_compat": "openai-compat",
+        "gateway": "agentgateway",
     }
     provider_key = provider_aliases.get(provider_key.lower(), provider_key.lower())
 
@@ -97,12 +98,35 @@ def get_model(model_string: str | None = None) -> BaseChatModel:
     provider_cfg = providers[provider_key]
     env_var = provider_cfg.get("env_var")
     install_pkg = provider_cfg.get("install", "")
+    gateway_url = os.environ.get("LLM_GATEWAY_URL", "").strip()
 
     # Check required env var
-    if env_var and not os.environ.get(env_var):
+    if env_var and not os.environ.get(env_var) and not gateway_url:
         raise ValueError(
             f"Provider '{provider_key}' requires {env_var} env var. "
             f"Set it in .env"
+        )
+
+    # If an LLM gateway is configured, route all providers through an
+    # OpenAI-compatible endpoint without changing graph/nodes code.
+    if gateway_url:
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError:
+            raise ImportError(
+                "LLM gateway mode requires langchain-openai. "
+                "Run: pip install langchain-openai"
+            )
+        gateway_api_key = (
+            os.environ.get("GATEWAY_API_KEY")
+            or os.environ.get("OPENAI_COMPAT_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+            or "unused"
+        )
+        return ChatOpenAI(
+            model=model_name,
+            api_key=gateway_api_key,
+            base_url=gateway_url or "http://localhost:8080/v1",
         )
 
     # Build the model instance
@@ -174,6 +198,26 @@ def get_model(model_string: str | None = None) -> BaseChatModel:
                     f"Run: pip install langchain-mistralai"
                 )
             return ChatMistralAI(model=model_name)
+
+        case "agentgateway":
+            try:
+                from langchain_openai import ChatOpenAI
+            except ImportError:
+                raise ImportError(
+                    "Provider 'agentgateway' requires langchain-openai. "
+                    "Run: pip install langchain-openai"
+                )
+            gateway_api_key = (
+                os.environ.get("GATEWAY_API_KEY")
+                or os.environ.get("OPENAI_COMPAT_API_KEY")
+                or os.environ.get("OPENAI_API_KEY")
+                or "unused"
+            )
+            return ChatOpenAI(
+                model=model_name,
+                api_key=gateway_api_key,
+                base_url=os.environ.get("LLM_GATEWAY_URL", "http://localhost:8080/v1"),
+            )
 
         case _:
             raise ValueError(f"Unsupported provider: '{provider_key}'")

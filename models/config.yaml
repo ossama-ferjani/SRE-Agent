@@ -1,7 +1,7 @@
 # ─── Active Model ─────────────────────────────────────────────
 # Change ONLY this file to switch models. Zero code changes needed.
 # Format: provider/model-name
-# Supported: gemini, claude, openai, ollama, mistral
+# Supported: gemini, claude, openai, ollama, mistral, openai-compat, agentgateway
 
 active:
   provider: "openai-compat"
@@ -37,3 +37,8 @@ providers:
     env_var: "MISTRAL_API_KEY"
     langchain_class: "ChatMistralAI"
     install: "langchain-mistralai"
+  agentgateway:
+    env_var: null
+    base_url_env: "LLM_GATEWAY_URL"
+    langchain_class: "ChatOpenAI"
+    install: "langchain-openai"

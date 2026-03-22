@@ -11,6 +11,8 @@ from unittest.mock import patch, MagicMock
 def clear_model_env(monkeypatch):
     """Ensure MODEL env var does not interfere with tests."""
     monkeypatch.delenv("MODEL", raising=False)
+    monkeypatch.delenv("LLM_GATEWAY_URL", raising=False)
+    monkeypatch.delenv("GATEWAY_API_KEY", raising=False)
 
 
 def _mock_provider(env_var: str | None, monkeypatch):
@@ -143,3 +145,19 @@ def test_list_supported_providers_returns_five():
     assert "openai" in providers
     assert "ollama" in providers
     assert "mistral" in providers
+
+
+def test_llm_gateway_overrides_provider_client(monkeypatch):
+    monkeypatch.setenv("LLM_GATEWAY_URL", "http://localhost:8080/v1")
+    monkeypatch.setenv("GATEWAY_API_KEY", "gw-key")
+    mock_cls = MagicMock()
+    with patch.dict("sys.modules", {"langchain_openai": MagicMock(ChatOpenAI=mock_cls)}):
+        from models import registry
+        import importlib
+        importlib.reload(registry)
+        registry.get_model("claude/claude-3-5-sonnet")
+        mock_cls.assert_called_once_with(
+            model="claude-3-5-sonnet",
+            api_key="gw-key",
+            base_url="http://localhost:8080/v1",
+        )
