@@ -1,3 +1,10 @@
+config:
+  tracing:
+    otlpEndpoint: ${AGENTGATEWAY_OTLP_ENDPOINT:-http://localhost:4317}
+    otlpProtocol: ${AGENTGATEWAY_OTLP_PROTOCOL:-grpc}
+    randomSampling: ${AGENTGATEWAY_TRACE_RANDOM_SAMPLING:-true}
+    clientSampling: ${AGENTGATEWAY_TRACE_CLIENT_SAMPLING:-true}
+
 binds:
   - port: 3000
     listeners:
