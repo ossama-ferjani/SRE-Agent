@@ -16,6 +16,18 @@ binds:
                   tokensPerFill: 200
                   fillInterval: 60s
                   type: requests
+              jwtAuth:
+                mode: strict
+                issuer: ${JWT_ISSUER}
+                audiences:
+                  - ${JWT_AUDIENCE}
+                jwks:
+                  file: ${JWT_JWKS_FILE}
+              mcpAuthorization:
+                rules:
+                  - 'has(jwt.sub) && mcp.tool.name == "kubernetes_get_pods"'
+                  - 'has(jwt.sub) && mcp.tool.name == "prometheus_query"'
+                  - 'has(jwt.sub) && mcp.tool.name == "argocd_get_apps"'
             backends:
               - mcp:
                   targets:
