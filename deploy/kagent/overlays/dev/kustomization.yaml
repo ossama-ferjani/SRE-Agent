@@ -1,0 +1,6 @@
+# Default overlay: single-replica gateway, same as previous flat manifests.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base

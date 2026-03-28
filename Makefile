@@ -1,6 +1,7 @@
 .PHONY: install run test test-memory test-registry lint format clean \
         mcp-install sqld-up sqld-down reset-memory \
-        port-forward switch-model gateway run-gateway
+        port-forward switch-model gateway run-gateway \
+        kagent-apply kagent-apply-byo kagent-verify kagent-incluster kagent-secrets kagent-render kagent-smoke
 
 # ── Setup ──────────────────────────────────────────────────────
 install:
@@ -76,3 +77,32 @@ switch-model:
 	@echo ""
 	@echo "Or set env var at runtime:  MODEL=openai/gpt-4o make run"
 	@echo "Or use CLI command:         /model openai/gpt-4o"
+
+# ── kagent migration helpers ───────────────────────────────────
+# Overlays: remote | byo | dev | prod  (default for full stack: dev)
+KAGENT_OVERLAY ?= dev
+
+kagent-apply:
+	kubectl apply -k deploy/kagent/overlays/remote
+
+kagent-apply-byo:
+	kubectl apply -k deploy/kagent/overlays/byo
+
+kagent-verify:
+	kagent get agent
+	kagent get session
+
+kagent-smoke:
+	bash deploy/kagent/scripts/smoke-kagent.sh
+
+# Load keys from .env into kagent namespace (run before or after kagent-incluster).
+kagent-secrets:
+	bash deploy/kagent/scripts/apply-secrets-from-env.sh
+
+# Full in-cluster stack (MCP + agentgateway + RemoteMCPServer + BYO). Use KAGENT_OVERLAY=prod for HA gateway.
+kagent-incluster:
+	kubectl apply -k deploy/kagent/overlays/$(KAGENT_OVERLAY)
+
+# Render manifests to stdout (e.g. make kagent-render KAGENT_OVERLAY=prod)
+kagent-render:
+	kubectl kustomize deploy/kagent/overlays/$(KAGENT_OVERLAY)

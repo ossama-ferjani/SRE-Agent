@@ -1,0 +1,6 @@
+# RemoteMCPServer only — use after gateway + MCP stack is up (or with external gateway URL patched in base).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base/integration/bundles/remote

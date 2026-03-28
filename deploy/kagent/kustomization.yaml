@@ -1,0 +1,6 @@
+# Shorthand: `kubectl apply -k deploy/kagent` == dev overlay (full stack).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - overlays/dev

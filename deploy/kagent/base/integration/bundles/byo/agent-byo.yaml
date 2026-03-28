@@ -1,0 +1,40 @@
+# Secrets: bash deploy/kagent/scripts/apply-secrets-from-env.sh
+---
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: sre-agent-byo
+  namespace: kagent
+spec:
+  description: "SRE Agent BYO runtime preserving LangGraph + memory behavior"
+  type: BYO
+  byo:
+    deployment:
+      image: ghcr.io/your-org/sre-agent:latest
+      env:
+        - name: MCP_GATEWAY_URL
+          value: "http://agentgateway.kagent.svc.cluster.local:3000"
+        - name: LLM_GATEWAY_URL
+          value: "http://agentgateway.kagent.svc.cluster.local:8080/v1"
+        - name: LLM_GATEWAY_PROVIDER
+          value: "openai-compat"
+        - name: OPENAI_COMPAT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sre-agent-secrets
+              key: OPENAI_COMPAT_API_KEY
+        - name: GOOGLE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sre-agent-secrets
+              key: GOOGLE_API_KEY
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sre-agent-secrets
+              key: OPENAI_API_KEY
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: sre-agent-secrets
+              key: ANTHROPIC_API_KEY

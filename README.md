@@ -96,6 +96,16 @@ Docs:
 - [Agentgateway standalone docs](https://agentgateway.dev/docs/standalone/latest/)
 - [MCP quickstart](https://agentgateway.dev/docs/standalone/latest/quickstart/mcp)
 
+## kagent Migration (WIP)
+
+You can migrate runtime control to kagent while keeping current behavior via BYO mode.
+
+- Plan: `deploy/kagent/MIGRATION_PLAN.md`
+- Layout: `deploy/kagent/` (Kustomize `base/` + `overlays/dev|prod|remote|byo`)
+- Guide: `deploy/kagent/README.md`
+
+This path keeps `agentgateway` as MCP/auth/telemetry control plane and moves orchestration runtime into kagent.
+
 ## Usage Examples
 
 ```

@@ -1,0 +1,6 @@
+# BYO Agent only — requires sre-agent-secrets (see scripts/apply-secrets-from-env.sh).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base/integration/bundles/byo

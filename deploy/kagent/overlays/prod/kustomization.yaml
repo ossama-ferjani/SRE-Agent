@@ -1,0 +1,9 @@
+# Production-oriented defaults: HA gateway, resource requests/limits.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+patches:
+  - path: patches/agentgateway-deployment.yaml

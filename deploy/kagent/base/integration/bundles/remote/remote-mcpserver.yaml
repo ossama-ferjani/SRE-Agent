@@ -1,0 +1,12 @@
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: sre-agentgateway
+  namespace: kagent
+spec:
+  description: "SRE Agentgateway MCP endpoint"
+  protocol: STREAMABLE_HTTP
+  # In-cluster gateway. For local dev via port-forward, point URL at a URL reachable from kagent pods.
+  url: "http://agentgateway.kagent.svc.cluster.local:3000/mcp"
+  timeout: 31s
+  terminateOnClose: true

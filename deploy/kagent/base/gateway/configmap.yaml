@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-config
+  namespace: kagent
+data:
+  agentgateway.yaml: |
+    # yaml-language-server: $schema=https://agentgateway.dev/schema/config
+    binds:
+      - port: 3000
+        listeners:
+          - routes:
+              - policies:
+                  cors:
+                    allowOrigins: ["*"]
+                    allowHeaders:
+                      - mcp-protocol-version
+                      - content-type
+                      - authorization
+                    exposeHeaders:
+                      - Mcp-Session-Id
+                  localRateLimit:
+                    - maxTokens: 200
+                      tokensPerFill: 200
+                      fillInterval: 60s
+                      type: requests
+                backends:
+                  - mcp:
+                      targets:
+                        - name: kubernetes
+                          mcp:
+                            host: mcp-kubernetes.kagent.svc.cluster.local
+                            port: 3000
+                            path: /mcp
+                        - name: prometheus
+                          mcp:
+                            host: mcp-prometheus.kagent.svc.cluster.local
+                            port: 3000
+                            path: /mcp
+                        - name: argocd
+                          mcp:
+                            host: mcp-argocd.kagent.svc.cluster.local
+                            port: 3000
+                            path: /mcp

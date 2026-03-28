@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway
+  namespace: kagent
+spec:
+  selector:
+    app: agentgateway
+  ports:
+    - name: mcp
+      port: 3000
+      targetPort: 3000
+    - name: llm
+      port: 8080
+      targetPort: 8080
+    - name: admin
+      port: 15000
+      targetPort: 15000
